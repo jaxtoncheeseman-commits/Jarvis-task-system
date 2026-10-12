@@ -1,0 +1,294 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#071015">
+<title>JARVIS Task Control</title>
+<style>
+:root {
+  color-scheme: dark;
+  --bg:#060b0f;
+  --panel:#0d191f;
+  --line:#20404a;
+  --cyan:#56e7f4;
+  --text:#e9f7fa;
+  --muted:#91aab3;
+}
+* { box-sizing:border-box; }
+body {
+  margin:0; padding:18px;
+  background:radial-gradient(ellipse at top,#12323b,var(--bg) 60%);
+  color:var(--text);
+  font-family:system-ui,Arial,sans-serif;
+}
+main { max-width:760px; margin:auto; }
+header { display:flex; align-items:center; gap:12px; margin-bottom:20px; }
+.logo {
+  width:48px;height:48px;border:1px solid var(--cyan);
+  border-radius:14px;display:grid;place-items:center;
+  color:var(--cyan);font-size:26px;font-weight:bold;
+}
+h1 { font-size:17px;letter-spacing:2px;margin:0; }
+.sub { color:var(--cyan);font-size:10px;letter-spacing:3px; }
+.panel {
+  background:var(--panel);border:1px solid var(--line);
+  border-radius:16px;padding:16px;margin:12px 0;
+}
+h2 { font-size:25px;margin:5px 0 10px; }
+h2 span,.number { color:var(--cyan); }
+.stats { display:grid;grid-template-columns:repeat(3,1fr);gap:8px; }
+.number { font-size:25px;font-weight:bold; }
+small,.muted { color:var(--muted); }
+label { display:block;color:var(--muted);font-size:11px;margin:12px 0 5px; }
+input,select,button {
+  font:inherit;border-radius:10px;padding:11px;
+}
+input,select {
+  width:100%;background:#071015;color:var(--text);
+  border:1px solid var(--line);
+}
+button {
+  background:#102b33;color:var(--cyan);
+  border:1px solid #28616c;font-weight:bold;cursor:pointer;
+}
+button.primary { background:var(--cyan);color:#061115; }
+form button { margin-top:14px;width:100%; }
+.task {
+  border:1px solid var(--line);border-radius:12px;
+  padding:12px;margin:8px 0;background:#091319;
+}
+.tasktop { display:flex;gap:10px;align-items:flex-start; }
+.tasktop input { width:20px;margin-top:3px; }
+.taskname { flex:1;overflow-wrap:anywhere;font-weight:bold; }
+.task.done { opacity:.55; }
+.task.done .taskname { text-decoration:line-through; }
+.tags { display:flex;gap:6px;flex-wrap:wrap;margin:8px 0; }
+.tag { font-size:11px;border:1px solid var(--line);border-radius:6px;padding:4px 7px;color:var(--muted); }
+.high { color:#ff8994; }.medium { color:#ffd479; }.low { color:#79f2b1; }
+.taskbuttons { display:flex;gap:7px;margin-top:8px; }
+.taskbuttons button { padding:7px 10px; }
+footer { text-align:center;color:var(--muted);font-size:11px;margin:22px 0; }
+@media(max-width:360px) { body{padding:10px} h1{font-size:14px} }
+</style>
+</head>
+<body>
+<main>
+<header>
+  <div class="logo">J</div>
+  <div><div class="sub">PERSONAL OPERATIONS</div>
+  <h1>JARVIS TASK CONTROL</h1></div>
+</header>
+
+<section class="panel">
+  <small id="date">MISSION CONTROL</small>
+  <h2>Let's get things <span>done.</span></h2>
+  <p class="muted">Your goals. Your system. Your next move, boss.</p>
+  <div class="stats">
+    <div><div class="number" id="active">0</div><small>ACTIVE</small></div>
+    <div><div class="number" id="completed">0</div><small>COMPLETED</small></div>
+    <div><div class="number" id="urgent">0</div><small>HIGH PRIORITY</small></div>
+  </div>
+</section>
+
+<section class="panel">
+<h3>＋ NEW MISSION</h3>
+<form id="taskForm">
+  <label for="title">MISSION NAME</label>
+  <input id="title" maxlength="120" placeholder="What needs to get done?" required>
+  <label for="project">PROJECT</label>
+  <select id="project">
+    <option>Project JARVIS</option><option>PC Build</option>
+    <option>PC Fund</option><option>School</option><option>Personal</option>
+  </select>
+  <label for="priority">PRIORITY</label>
+  <select id="priority">
+    <option>High</option><option selected>Medium</option><option>Low</option>
+  </select>
+  <label for="due">DUE DATE (OPTIONAL)</label>
+  <input id="due" type="date">
+  <label for="repeat">REPEAT</label>
+  <select id="repeat">
+    <option>None</option><option>Daily</option>
+    <option>Weekly</option><option>Monthly</option>
+  </select>
+  <button class="primary">＋ ADD MISSION</button>
+</form>
+</section>
+
+<section class="panel">
+  <h3>◈ YOUR MISSIONS</h3>
+  <label for="filter">SHOW</label>
+  <select id="filter">
+    <option>Active</option><option>All</option><option>Completed</option>
+  </select>
+  <div id="tasks"></div>
+</section>
+
+<section class="panel">
+  <h3>⚙ SYSTEM TOOLS</h3>
+  <button id="backup">EXPORT BACKUP</button>
+  <button id="restore">IMPORT BACKUP</button>
+  <input id="backupFile" type="file" accept=".json" hidden>
+  <p class="muted">Your tasks save in this browser on this device. Export backups regularly. Recurring missions create their next copy when completed.</p>
+</section>
+<footer>JARVIS TASK CONTROL · SYSTEM ONLINE</footer>
+</main>
+
+<script>
+const KEY = "jarvisTasksV1";
+const $ = id => document.getElementById(id);
+let tasks = [];
+
+function load() {
+  try {
+    tasks = JSON.parse(localStorage.getItem(KEY) || "[]");
+    if (!Array.isArray(tasks)) tasks = [];
+  } catch { tasks = []; }
+
+  if (tasks.length === 0) {
+    tasks = [
+      {id:1,title:"Set up JARVIS task system",project:"Project JARVIS",priority:"High",repeat:"None",due:"",done:false},
+      {id:2,title:"Keep saving toward the gaming PC",project:"PC Build",priority:"Medium",repeat:"Weekly",due:"",done:false},
+      {id:3,title:"Ask Mom which books I can sell",project:"PC Fund",priority:"Low",repeat:"None",due:"",done:false}
+    ];
+    save();
+  }
+}
+
+function save() {
+  localStorage.setItem(KEY,JSON.stringify(tasks));
+  render();
+}
+
+function escapeHTML(value) {
+  return String(value).replace(/[&<>"']/g,c=>({
+    "&":"&amp;","<":"&lt;",">":"&gt;",
+    '"':"&quot;","'":"&#39;"
+  }[c]));
+}
+
+function nextDue(due,repeat) {
+  let d = due ? new Date(due+"T12:00:00") : new Date();
+  if (repeat==="Daily") d.setDate(d.getDate()+1);
+  if (repeat==="Weekly") d.setDate(d.getDate()+7);
+  if (repeat==="Monthly") {
+    const day=d.getDate();
+    d.setMonth(d.getMonth()+1);
+    if (d.getDate()<day) d.setDate(0);
+  }
+  return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
+}
+
+function render() {
+  const active=tasks.filter(t=>!t.done);
+  $("active").textContent=active.length;
+  $("completed").textContent=tasks.filter(t=>t.done).length;
+  $("urgent").textContent=active.filter(t=>t.priority==="High").length;
+  $("date").textContent="MISSION CONTROL / "+new Date().toLocaleDateString();
+
+  const filter=$("filter").value;
+  const shown=tasks.filter(t=>filter==="All" ||
+    (filter==="Active"&&!t.done) ||
+    (filter==="Completed"&&t.done));
+
+  if (!shown.length) {
+    $("tasks").innerHTML='<p class="muted">No missions here. Add one above.</p>';
+    return;
+  }
+
+  $("tasks").innerHTML=shown.map(t=>`
+    <div class="task ${t.done?"done":""}">
+      <div class="tasktop">
+        <input type="checkbox" data-action="toggle" data-id="${t.id}" ${t.done?"checked":""} aria-label="Complete task">
+        <div class="taskname">${escapeHTML(t.title)}</div>
+      </div>
+      <div class="tags">
+        <span class="tag">${escapeHTML(t.project)}</span>
+        <span class="tag ${t.priority.toLowerCase()}">${escapeHTML(t.priority)}</span>
+        ${t.due?`<span class="tag">Due ${escapeHTML(t.due)}</span>`:""}
+        ${t.repeat!=="None"?`<span class="tag">↻ ${escapeHTML(t.repeat)}</span>`:""}
+      </div>
+      <div class="taskbuttons">
+        <button data-action="edit" data-id="${t.id}">EDIT</button>
+        <button data-action="delete" data-id="${t.id}">DELETE</button>
+      </div>
+    </div>`).join("");
+}
+
+$("taskForm").addEventListener("submit",e=>{
+  e.preventDefault();
+  const title=$("title").value.trim();
+  if(!title)return;
+  tasks.unshift({
+    id:Date.now()+Math.random(),title,
+    project:$("project").value,priority:$("priority").value,
+    due:$("due").value,repeat:$("repeat").value,done:false
+  });
+  e.target.reset();
+  $("priority").value="Medium";
+  save();
+});
+
+$("filter").addEventListener("change",render);
+
+$("tasks").addEventListener("change",e=>{
+  const el=e.target;
+  if(el.dataset.action!=="toggle")return;
+  const t=tasks.find(t=>String(t.id)===el.dataset.id);
+  if(!t)return;
+  t.done=el.checked;
+  if(t.done && t.repeat!=="None") {
+    tasks.unshift({...t,id:Date.now()+Math.random(),
+      due:nextDue(t.due,t.repeat),done:false});
+  }
+  save();
+});
+
+$("tasks").addEventListener("click",e=>{
+  const b=e.target.closest("button[data-action]");
+  if(!b)return;
+  const i=tasks.findIndex(t=>String(t.id)===b.dataset.id);
+  if(i<0)return;
+  if(b.dataset.action==="delete") {
+    if(confirm("Delete this mission?"))tasks.splice(i,1);
+  } else if(b.dataset.action==="edit") {
+    const t=tasks[i];
+    const title=prompt("Mission name:",t.title);
+    if(title===null)return;
+    if(!title.trim())return alert("Enter a mission name.");
+    t.title=title.trim();
+    save();
+    return;
+  }
+  save();
+});
+
+$("backup").onclick=()=>{
+  const blob=new Blob([JSON.stringify(tasks,null,2)],{type:"application/json"});
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(blob);
+  a.download="jarvis-backup.json";
+  a.click();
+  URL.revokeObjectURL(a.href);
+};
+
+$("restore").onclick=()=>$("backupFile").click();
+
+$("backupFile").onchange=async e=>{
+  try {
+    const imported=JSON.parse(await e.target.files[0].text());
+    if(!Array.isArray(imported))throw Error();
+    if(confirm("Replace current tasks with this backup?")) {
+      tasks=imported;save();alert("Backup restored.");
+    }
+  } catch { alert("That backup file is invalid."); }
+  e.target.value="";
+};
+
+load();
+render();
+</script>
+</body>
+</html>
